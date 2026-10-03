@@ -1,0 +1,9 @@
+services:
+  app:
+    image: registry.miem.hse.ru/kg26-27/glmitaganov:latest
+    build: .
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
