@@ -35,7 +35,6 @@ end_time = st.sidebar.number_input("По (сек, 0 = всё видео)", min_v
 st.sidebar.subheader("Детекция движения")
 frame_step = st.sidebar.slider("Шаг кадров", min_value=1, max_value=5, value=2)
 var_threshold = st.sidebar.slider("Чувствительность", min_value=4, max_value=100, value=16)
-min_area_pct = st.sidebar.slider("Мин. площадь объекта (%)", min_value=0.01, max_value=5.0, value=0.1, step=0.05)
 
 # Тепловая карта
 st.sidebar.subheader("Тепловая карта")
@@ -81,7 +80,6 @@ if uploaded_file is not None:
                 end=end_time,
                 frame_step=frame_step,
                 var_threshold=var_threshold,
-                min_area_pct=min_area_pct,
                 blur_pct=blur_pct,
                 alpha=alpha,
                 colormap=COLORMAPS[selected_colormap],
@@ -143,7 +141,7 @@ if "results" in st.session_state:
 
     with col2:
         st.markdown("**Финальная тепловая карта**")
-        st.image(res["image_bytes"], use_container_width=True)
+        st.image(res["image_bytes"], width="stretch")
         st.download_button(
             label="Скачать карту (PNG)",
             data=res["image_bytes"],

@@ -1,11 +1,9 @@
 import os
 import time
-import shutil
-import subprocess
-import tempfile
 from typing import Callable, Optional, Dict, Any
 import cv2
 import numpy as np
+import imageio
 
 from heatmap_core import Params, HeatmapEngine
 
@@ -16,7 +14,6 @@ class VideoProcessor:
         self.engine = HeatmapEngine(params)
 
     def process(self, input_video_path: str, output_video_path: str, output_image_path: str) -> Dict[str, Any]:
-        # Проверка существования файла
         if not os.path.exists(input_video_path):
             raise FileNotFoundError(f"Файл не найден: {input_video_path}")
 
@@ -33,60 +30,47 @@ class VideoProcessor:
         if orig_w <= 0 or orig_h <= 0 or total_frames <= 0:
             cap.release()
             raise RuntimeError("Некорректные параметры видеофайла")
-
         if fps <= 0 or np.isnan(fps):
             fps = 25.0
 
-        # Масштабирование
+        # Масштабирование до 640px по ширине
         target_w = 640
         target_h = int(orig_h * (target_w / orig_w))
-        if target_h % 2 != 0:
-            target_h -= 1
+        target_h -= target_h % 2  # чётная высота для H.264
 
-        # Определение диапазона
+        # Диапазон кадров
         start_frame = int(self.params.start * fps)
         end_frame = int(self.params.end * fps) if self.params.end > 0 else total_frames
         start_frame = max(0, min(start_frame, total_frames - 1))
         end_frame = max(start_frame + 1, min(end_frame, total_frames))
 
-        # Разогрев фона
-        warmup_frames = 30
+        # Разогрев фона (30 кадров до начала)
+        warmup_count = 30
         if start_frame > 0:
-            warmup_start = max(0, start_frame - warmup_frames)
-            cap.set(cv2.CAP_PROP_POS_FRAMES, warmup_start)
-            for _ in range(start_frame - warmup_start):
+            cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, start_frame - warmup_count))
+            for _ in range(min(warmup_count, start_frame)):
                 ret, frame = cap.read()
                 if not ret:
                     break
-                frame_res = cv2.resize(frame, (target_w, target_h))
-                self.engine.process_frame(frame_res, is_warmup=True)
+                self.engine.process_frame(cv2.resize(frame, (target_w, target_h)), is_warmup=True)
         else:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-            for _ in range(min(warmup_frames, total_frames)):
+            for _ in range(min(warmup_count, total_frames)):
                 ret, frame = cap.read()
                 if not ret:
                     break
-                frame_res = cv2.resize(frame, (target_w, target_h))
-                self.engine.process_frame(frame_res, is_warmup=True)
+                self.engine.process_frame(cv2.resize(frame, (target_w, target_h)), is_warmup=True)
             cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
 
-        # Подготовка записи
+        # Запись через imageio-ffmpeg (H.264, браузер-совместимый)
         out_fps = max(1.0, fps / self.params.frame_step)
-        has_ffmpeg = shutil.which("ffmpeg") is not None
-        
-        if has_ffmpeg:
-            temp_avi_file = tempfile.NamedTemporaryFile(suffix=".avi", delete=False)
-            raw_output_path = temp_avi_file.name
-            temp_avi_file.close()
-            fourcc = cv2.VideoWriter_fourcc(*'MJPG')
-        else:
-            raw_output_path = output_video_path
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-
-        writer = cv2.VideoWriter(raw_output_path, fourcc, out_fps, (target_w, target_h))
-        if not writer.isOpened():
-            cap.release()
-            raise RuntimeError("Ошибка инициализации VideoWriter")
+        writer = imageio.get_writer(
+            output_video_path,
+            fps=out_fps,
+            codec="libx264",
+            quality=None,
+            pixelformat="yuv420p",
+            output_params=["-movflags", "+faststart"],
+        )
 
         total_steps = (end_frame - start_frame + self.params.frame_step - 1) // self.params.frame_step
         processed_count = 0
@@ -94,10 +78,10 @@ class VideoProcessor:
         start_time = time.time()
 
         try:
-            curr_frame_idx = start_frame
-            cap.set(cv2.CAP_PROP_POS_FRAMES, curr_frame_idx)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+            curr_idx = start_frame
 
-            while curr_frame_idx < end_frame:
+            while curr_idx < end_frame:
                 ret, frame = cap.read()
                 if not ret:
                     break
@@ -107,50 +91,33 @@ class VideoProcessor:
                     first_frame = frame_res.copy()
 
                 # Обработка и рендер
-                rects = self.engine.process_frame(frame_res, is_warmup=False)
-                rendered = self.engine.render(frame_res, rects=rects)
-                writer.write(rendered)
+                self.engine.process_frame(frame_res)
+                rendered = self.engine.render(frame_res)
 
+                # imageio ожидает RGB
+                writer.append_data(cv2.cvtColor(rendered, cv2.COLOR_BGR2RGB))
                 processed_count += 1
 
                 # Пропуск кадров
-                skip = self.params.frame_step - 1
-                for _ in range(skip):
+                for _ in range(self.params.frame_step - 1):
                     if not cap.grab():
                         break
-                curr_frame_idx += self.params.frame_step
+                curr_idx += self.params.frame_step
 
                 # Прогресс
                 if self.progress_callback and total_steps > 0:
                     elapsed = time.time() - start_time
                     curr_fps = processed_count / elapsed if elapsed > 0 else 0.0
-                    progress_pct = min(1.0, processed_count / total_steps)
-                    self.progress_callback(progress_pct, curr_fps)
+                    self.progress_callback(min(1.0, processed_count / total_steps), curr_fps)
 
         finally:
             cap.release()
-            writer.release()
+            writer.close()
 
-        # Итоговая статическая тепловая карта
+        # Статическая тепловая карта
         if first_frame is not None:
-            final_heatmap = self.engine.render(first_frame, rects=None)
+            final_heatmap = self.engine.render(first_frame)
             cv2.imwrite(output_image_path, final_heatmap)
-
-        # Конвертация в H.264
-        if has_ffmpeg:
-            try:
-                cmd = [
-                    "ffmpeg", "-y",
-                    "-i", raw_output_path,
-                    "-c:v", "libx264",
-                    "-pix_fmt", "yuv420p",
-                    "-movflags", "+faststart",
-                    output_video_path
-                ]
-                subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            finally:
-                if os.path.exists(raw_output_path):
-                    os.remove(raw_output_path)
 
         total_elapsed = time.time() - start_time
         avg_fps = processed_count / total_elapsed if total_elapsed > 0 else 0.0
@@ -160,5 +127,5 @@ class VideoProcessor:
             "elapsed_sec": round(total_elapsed, 2),
             "fps": round(avg_fps, 1),
             "video_path": output_video_path,
-            "image_path": output_image_path
+            "image_path": output_image_path,
         }
