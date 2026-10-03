@@ -4,6 +4,4 @@ services:
     build: .
     ports:
       - "8501:8501"
-    volumes:
-      - ./data:/data
     restart: unless-stopped

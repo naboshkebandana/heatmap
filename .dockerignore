@@ -1,6 +1,5 @@
 .venv/
 dataset/
-data/
 .git/
 __pycache__/
 *.mp4
