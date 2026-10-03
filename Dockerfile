@@ -17,7 +17,8 @@ RUN python -c "import cv2, numpy, streamlit"
 # Код приложения
 COPY .streamlit/ .streamlit/
 COPY app.py .
-COPY heatmap_core.py* ./
+COPY heatmap_core.py .
+COPY video_processor.py .
 
 EXPOSE 8501
 
