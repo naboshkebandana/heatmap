@@ -1,20 +1,20 @@
 FROM python:3.12-slim-bookworm
 
-# Системные зависимости: ffmpeg для перекодирования видео в H.264
+# System dependencies: ffmpeg for video transcoding to H.264
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ffmpeg && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Сначала зависимости (кэшируется отдельным слоем)
+# Dependencies first (cached as a separate layer)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Проверка импортов — сборка упадёт сразу, если чего-то не хватает
+# Verify imports — build fails immediately if anything is missing
 RUN python -c "import cv2, numpy, streamlit, imageio"
 
-# Код приложения
+# Application code
 COPY .streamlit/ .streamlit/
 COPY app.py .
 COPY heatmap_core.py .

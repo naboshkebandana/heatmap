@@ -1,63 +1,72 @@
-## 1. Описание программы
+# Motion Heatmap Generator
 
-**Генератор тепловых карт движения** - веб-приложение для автоматического анализа видеозаписей и визуализации зон активности в виде тепловой карты.
+**Motion Heatmap Generator** is a web application for automated video analysis and motion activity visualization using dynamic heatmaps.
 
-**Что делает:**
-- Принимает видеофайл через веб-интерфейс
-- Детектирует движущиеся объекты методом вычитания фона
-- Накапливает данные о движении и строит тепловую карту
-- Выдаёт два результата: видео с наложенной тепловой картой и статичное изображение итоговой карты 
+## Features
 
-**Возможности:**
-- Поддержка форматов MP4, AVI, MOV, MKV
-- Настройка временного диапазона
-- Регулировка чувствительности детекции, сглаживания и прозрачности карты
-- Выбор цветовых схем
-- Настройкаа зон исключения
-- Скачивание результатов прямо из браузера
+- **Interactive Web Interface:** Upload and analyze videos directly in your browser.
+- **Motion Detection:** Background subtraction using the MOG2 algorithm to identify moving objects.
+- **Heatmap Accumulation:** Accumulates motion density over time and renders a color-coded activity heatmap.
+- **Dual Export Options:** Produces both an H.264 encoded video with the heatmap overlay and a static summary image.
+- **Format Support:** Supports MP4, AVI, MOV, and MKV video formats.
+- **Flexible Time Range:** Analyze the entire video or specify custom start/end timestamps.
+- **Customizable Parameters:** Fine-tune sensitivity thresholds, Gaussian blur radius, opacity, and colormaps (Turbo, Jet, Inferno, Viridis, Hot, Ocean).
+- **Exclusion Zones:** Ignore motion in header or footer regions (e.g., timestamps, watermarks, UI elements).
+- **Direct Downloads:** Export processed MP4 video and PNG static image directly from the browser.
 
-**Ограничения:**
-- Максимальный размер загружаемого файла - 200 МБ
-- Видео масштабируется до 640px по ширине
-- Не отслеживает отдельные объекты
+## Limitations
 
-## 2. Системные требования
+- Maximum upload file size: 200 MB
+- Video frames are scaled to 640px width for fast and consistent processing
+- Does not track individual object identities (measures aggregate spatial activity)
+
+## System Requirements
 
 - Python 3.12+
-- ОС: Windows / Linux / macOS
-- Оперативная память: от 4 ГБ 
-- Свободное место на диске: ~500 МБ
-- Docker и Docker Compose
+- OS: Windows / Linux / macOS
+- RAM: 4 GB+
+- Free disk space: ~500 MB
+- Docker & Docker Compose (optional, for containerized deployment)
 
-## 3. Специфика запуска и загрузки данных
+## Getting Started
 
-**Локальный запуск:**
+### Local Setup
+
+1. Install dependencies:
 ```bash
 pip install -r requirements.txt
+```
+
+2. Run the Streamlit application:
+```bash
 streamlit run app.py
 ```
-Приложение откроется в браузере по адресу http://localhost:8501.
+The application will open automatically in your browser at `http://localhost:8501`.
 
-**Запуск через Docker:**
+### Docker Deployment
+
+To build and run the application container:
 ```bash
 docker compose up --build
 ```
-Приложение доступно на http://localhost:8501.
+The application will be accessible at `http://localhost:8501`.
 
-**Загрузка данных:**
-1. Открыть веб-интерфейс в браузере
-2. Нажать «Browse files» и выбрать видеофайл
-3. Нажать «Запустить обработку»
-4. скачать видео с тепловой картой / статичное изображение
+### How to Use
 
-## 4. Задействованные инструменты
+1. Open the application in your browser.
+2. Click **"Select video file"** and choose a video file.
+3. Configure detection and visualization parameters in the sidebar as needed.
+4. Click **"Start Processing"**.
+5. Once processing finishes, view the results and download the MP4 video and PNG heatmap image.
 
-| Инструмент | Версия | Назначение |
+## Built With
+
+| Tool | Version | Purpose |
 |---|---|---|
-| Python | 3.12+ | Язык разработки |
-| Streamlit | 1.65.0 | Веб-интерфейс |
-| OpenCV (opencv-python-headless) | 5.0.0 | Обработка видео, детекция движения (MOG2), рендер тепловой карты |
-| NumPy | 2.5.3 | Работа с массивами, математические операции |
-| imageio | 2.38+ | Запись выходного видео |
-| imageio-ffmpeg | 0.5+ | Кодирование H.264 (встроенный ffmpeg-бинарник) |
-| Docker | — | Контейнеризация приложения |
+| Python | 3.12+ | Core programming language |
+| Streamlit | 1.65.0 | Web application framework and UI |
+| OpenCV (opencv-python-headless) | 5.0.0 | Video processing, MOG2 background subtraction, heatmap rendering |
+| NumPy | 2.5.3 | Numerical array operations |
+| imageio | 2.38+ | Output video stream writer |
+| imageio-ffmpeg | 0.5+ | H.264 browser-compatible video encoding |
+| Docker | — | Application containerization |
